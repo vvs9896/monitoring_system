@@ -66,7 +66,8 @@ def print_event_message(proc, message):
             delivery_mode = 2  # Персистентное сообщение
         )
     )
-    print(f"Message sent to RabbitMQ: {formatted_message}")
+    #print(f"Message sent to RabbitMQ: {formatted_message}")
+    print(formatted_message)
 
 class Process:
     def __init__(self, event):

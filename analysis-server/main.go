@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 
+	"container-security-monitoring/analysis"
+
 	"github.com/rabbitmq/amqp091-go"
 )
 
@@ -10,6 +12,11 @@ func failOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
 	}
+}
+
+type Event struct {
+	Type  string
+	Messg analysis.Message
 }
 
 func main() {
@@ -69,7 +76,13 @@ func main() {
 	go func() {
 		for d := range msgs {
 			log.Printf("Received a message: %s", d.Body)
-			// Здесь пишите логику обработки сообщения
+
+			messg, err := analysis.ParseManually(string(d.Body))
+			if err != nil {
+				failOnError(err, "Failed to parse an event")
+			}
+
+			log.Println(messg.Comm)
 		}
 	}()
 
