@@ -14,11 +14,6 @@ func failOnError(err error, msg string) {
 	}
 }
 
-type Event struct {
-	Type  string
-	Messg analysis.Message
-}
-
 func main() {
 	conn, err := amqp091.Dial("amqp://admin:admin@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
