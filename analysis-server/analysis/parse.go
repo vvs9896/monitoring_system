@@ -1,9 +1,11 @@
 package analysis
 
 import (
+	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Message struct {
@@ -16,11 +18,11 @@ type Message struct {
 	Message           string
 }
 
-func ParseManually(input string) (*Message, error) {
+func ParseManually(input string) (Message, error) {
 	// Разделяем по стрелке
 	parts := strings.Split(input, " -> ")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("arrow separator not found")
+		return Message{}, fmt.Errorf("arrow separator not found")
 	}
 
 	leftPart := parts[0] // не убираем пробелы, чтобы сохранить форматирование
@@ -41,11 +43,11 @@ func ParseManually(input string) (*Message, error) {
 	// PID (7 символов, начиная с позиции 12)
 	pidStr := strings.TrimSpace(leftPart[12:19])
 	if pidStr == "" {
-		return nil, fmt.Errorf("PID is required")
+		return Message{}, fmt.Errorf("PID is required")
 	}
 	event.PID, err = strconv.Atoi(pidStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid PID: %v", err)
+		return Message{}, fmt.Errorf("invalid PID: %v", err)
 	}
 
 	// Parent Container ID (14 символов, начиная с позиции 19)
@@ -57,11 +59,11 @@ func ParseManually(input string) (*Message, error) {
 	// PPID (7 символов, начиная с позиции 33)
 	ppidStr := strings.TrimSpace(leftPart[33:40])
 	if ppidStr == "" {
-		return nil, fmt.Errorf("PPID is required")
+		return Message{}, fmt.Errorf("PPID is required")
 	}
 	event.PPID, err = strconv.Atoi(ppidStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid PPID: %v", err)
+		return Message{}, fmt.Errorf("invalid PPID: %v", err)
 	}
 
 	// Parent Command (40 символов, начиная с позиции 40)
@@ -73,7 +75,7 @@ func ParseManually(input string) (*Message, error) {
 	// Парсим правую часть (после стрелки)
 	rightFields := strings.Fields(rightPart)
 	if len(rightFields) < 1 {
-		return nil, fmt.Errorf("insufficient fields in right part")
+		return Message{}, fmt.Errorf("insufficient fields in right part")
 	}
 
 	event.Comm = rightFields[0]
@@ -82,5 +84,37 @@ func ParseManually(input string) (*Message, error) {
 		event.Message = strings.Join(rightFields[1:], " ")
 	}
 
-	return &event, nil
+	return event, nil
+}
+
+func InsertEvent(db *sql.DB, event Event) error {
+	// Парсим Timestamp в time.Time
+	ts, err := time.Parse(time.RFC1123, event.Timestamp)
+	if err != nil {
+		return fmt.Errorf("failed to parse timestamp: %w", err)
+	}
+
+	query := `
+    INSERT INTO events(
+        time, type, container_id, pid, parent_container_id, ppid, parent_comm, comm, message, severity
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `
+
+	_, err = db.Exec(query,
+		ts,
+		event.Type,
+		event.Message.ContainerID,
+		event.Message.PID,
+		event.Message.ParentContainerID,
+		event.Message.PPID,
+		event.Message.ParentComm,
+		event.Message.Comm,
+		event.Message.Message,
+		event.Severity,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert event: %w", err)
+	}
+
+	return nil
 }

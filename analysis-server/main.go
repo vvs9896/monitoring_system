@@ -1,11 +1,15 @@
 package main
 
 import (
+	"database/sql"
+	"fmt"
 	"log"
 
 	"container-security-monitoring/analysis"
 
 	"github.com/rabbitmq/amqp091-go"
+
+	_ "github.com/lib/pq"
 )
 
 func failOnError(err error, msg string) {
@@ -77,7 +81,21 @@ func main() {
 				failOnError(err, "Failed to parse an event")
 			}
 
-			log.Println(messg.Comm)
+			var event analysis.Event = analysis.NewSignatureAnalyzer().AnalyzeEvent(messg)
+
+			connStr := "host=localhost port=5432 user=postgres password=postgres dbname=monitoring sslmode=disable"
+
+			db, err := sql.Open("postgres", connStr)
+			if err != nil {
+				log.Fatalf("failed to open connection: %v", err)
+			}
+
+			if err := analysis.InsertEvent(db, event); err != nil {
+				log.Fatalf("Error inserting event: %v", err)
+			}
+			db.Close()
+
+			fmt.Println("Event inserted successfully")
 		}
 	}()
 
