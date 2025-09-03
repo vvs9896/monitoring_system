@@ -1,0 +1,17 @@
+{
+  "rabbitmq": {
+    "host": "localhost",
+    "port": 5672,
+    "username": "admin",
+    "password": "admin",
+    "exchange": "events_exchange",
+    "queue": "events_queue",
+    "routing_key": "event_key"
+  },
+  "ebpf": {
+    "program_file": "ebpf_agent.c"
+  },
+  "logging": {
+    "level": "INFO"
+  }
+} 

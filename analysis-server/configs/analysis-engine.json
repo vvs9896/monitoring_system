@@ -1,0 +1,22 @@
+{
+  "rabbitmq": {
+    "host": "localhost",
+    "port": 5672,
+    "username": "admin",
+    "password": "admin",
+    "input_queue": "events_queue",
+    "output_queue": "analyzed_events_queue",
+    "exchange": "events_exchange",
+    "routing_key": "event_key",
+    "response_key": "analyzed_event_key"
+  },
+  "analysis": {
+    "enable_signature_analysis": true,
+    "enable_behavioral_analysis": false,
+    "batch_size": 1,
+    "processing_timeout_seconds": 30
+  },
+  "logging": {
+    "level": "INFO"
+  }
+} 

@@ -1,0 +1,41 @@
+[Unit]
+Description=Container Security Analysis Engine
+Documentation=https://github.com/your-org/monitoring-system
+After=network.target rabbitmq-server.service
+Wants=rabbitmq-server.service
+Requires=ebpf-monitor.service
+
+[Service]
+Type=simple
+User=analysis
+Group=analysis
+WorkingDirectory=/opt/analysis-engine
+ExecStart=/opt/analysis-engine/analysis-engine /etc/analysis-engine/config.json
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=analysis-engine
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/log /var/run
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryMax=1G
+CPUQuota=80%
+
+# Environment
+Environment=GOMAXPROCS=2
+
+[Install]
+WantedBy=multi-user.target 

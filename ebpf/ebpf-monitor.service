@@ -1,0 +1,41 @@
+[Unit]
+Description=eBPF Container Security Monitor
+Documentation=https://github.com/your-org/monitoring-system
+After=network.target rabbitmq-server.service
+Wants=rabbitmq-server.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/ebpf-monitor
+ExecStart=/usr/bin/python3 /opt/ebpf-monitor/ebpf_monitor.py --config /etc/ebpf-monitor/config.json
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ebpf-monitor
+
+# Security settings
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/log /var/run
+ProtectHome=true
+ProtectKernelTunables=false
+ProtectKernelModules=false
+ProtectControlGroups=false
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryMax=512M
+CPUQuota=50%
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=BCC_CACHE_DIR=/var/cache/bcc
+
+[Install]
+WantedBy=multi-user.target 

@@ -10,6 +10,33 @@ sudo rabbitmq-plugins enable rabbitmq_management
 sudo systemctl restart rabbitmq-server
 
 
+timescaledb:
+sudo -u postgres psql
+ALTER USER postgres WITH PASSWORD 'postgres';
+CREATE DATABASE monitoring;
+\c monitoring
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+CREATE TABLE events (
+    time TIMESTAMPTZ NOT NULL,
+    type TEXT NOT NULL,
+    container_id TEXT,
+    pid INT,
+    parent_container_id TEXT,
+    ppid INT,
+    parent_comm TEXT,
+    comm TEXT,
+    message TEXT,
+    severity TEXT
+);
+
+SELECT create_hypertable('events', 'time');
+sudo systemctl restart postgresql
+
+
+timescale http://ftp.ru.debian.org/debian/pool/main/t/timescaledb/postgresql-17-timescaledb_2.21.3+dfsg-1_amd64.deb
+rabbitmq http://ftp.ru.debian.org/debian/pool/main/r/rabbitmq-server/rabbitmq-server_4.0.5-10_all.deb
+
+
 tests:
 (1) CAP_SYS_PTRACE
     sudo docker run -it --cap-add CAP_SYS_PTRACE --pid=host --security-opt=apparmor:unconfined ubuntu:latest
@@ -23,7 +50,8 @@ tests:
     cp hello.ko root/
     cd root
     insmod hello.ko
-(3) sudo docker run -it ubuntu
+(3) CAP_MKNOD
+    sudo docker run -it ubuntu
     mknod /dev/sda b 8 0
 (4) CAP_SYS_ADMIN
     sudo docker run -it -v /proc:/host/proc ubuntu:latest

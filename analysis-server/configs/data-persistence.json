@@ -1,0 +1,30 @@
+{
+  "rabbitmq": {
+    "host": "localhost",
+    "port": 5672,
+    "username": "admin",
+    "password": "admin",
+    "queue": "analyzed_events_queue",
+    "exchange": "events_exchange",
+    "routing_key": "analyzed_event_key"
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "username": "postgres",
+    "password": "postgres",
+    "database": "monitoring",
+    "ssl_mode": "disable",
+    "max_connections": 10,
+    "conn_max_lifetime_minutes": 60
+  },
+  "processing": {
+    "batch_size": 10,
+    "flush_interval_seconds": 5,
+    "retry_attempts": 3,
+    "retry_delay_seconds": 1
+  },
+  "logging": {
+    "level": "INFO"
+  }
+} 
