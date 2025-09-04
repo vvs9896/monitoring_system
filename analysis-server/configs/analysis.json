@@ -4,9 +4,8 @@
     "port": 5672,
     "username": "admin",
     "password": "admin",
-    "queue": "analyzed_events_queue",
-    "exchange": "events_exchange",
-    "routing_key": "analyzed_event_key"
+    "queue": "events_queue",
+    "exchange": "events_exchange"
   },
   "database": {
     "host": "localhost",
@@ -18,13 +17,14 @@
     "max_connections": 10,
     "conn_max_lifetime_minutes": 60
   },
+  "analysis": {
+    "enable_signature_analysis": true,
+    "enable_behavioral_analysis": false
+  },
   "processing": {
     "batch_size": 10,
     "flush_interval_seconds": 5,
     "retry_attempts": 3,
     "retry_delay_seconds": 1
-  },
-  "logging": {
-    "level": "INFO"
   }
 } 

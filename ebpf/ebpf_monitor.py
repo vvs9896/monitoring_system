@@ -66,6 +66,8 @@ class EBPFMonitor:
         logger.info(f"Received signal {signum}, shutting down...")
         self.running = False
     
+
+    
     def initialize_bpf(self):
         """Инициализация eBPF программы"""
         try:
@@ -360,11 +362,13 @@ class EBPFMonitor:
             else:
                 logger.info(formatted_message)
             
-            # Отправка в RabbitMQ (используем существующую функцию)
+            # Отправка в RabbitMQ используя существующую функцию из util.py
             print_event_message(proc, message)
             
         except Exception as e:
             logger.error(f"Error logging event message: {e}")
+    
+
     
     def run(self):
         """Основной цикл мониторинга"""

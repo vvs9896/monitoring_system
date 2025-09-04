@@ -1,211 +1,96 @@
-.PHONY: build install uninstall start stop status logs clean test help
+.PHONY: build install uninstall start stop status logs clean test
 
 # Variables
-ANALYSIS_ENGINE_SERVICE = analysis-engine
-DATA_PERSISTENCE_SERVICE = data-persistence
-INSTALL_DIR_AE = /opt/analysis-engine
-INSTALL_DIR_DP = /opt/data-persistence
-CONFIG_DIR_AE = /etc/analysis-engine
-CONFIG_DIR_DP = /etc/data-persistence
+SERVICE_NAME = analysis-engine
+BINARY_NAME = analysis-engine
+INSTALL_DIR = /opt/analysis-engine
+CONFIG_DIR = /etc/analysis-engine
 SYSTEMD_DIR = /etc/systemd/system
 
-# Go build settings
-GOOS = linux
-GOARCH = amd64
-CGO_ENABLED = 0
-
-# Default target
-help:
-	@echo "Container Security Analysis Services"
-	@echo ""
-	@echo "Available targets:"
-	@echo "  build       - Build both services"
-	@echo "  install     - Install both services"
-	@echo "  uninstall   - Uninstall both services"
-	@echo "  start       - Start both services"
-	@echo "  stop        - Stop both services"
-	@echo "  restart     - Restart both services"
-	@echo "  status      - Show services status"
-	@echo "  logs        - Show services logs"
-	@echo "  test        - Test the installation"
-	@echo "  clean       - Clean build artifacts"
-	@echo ""
-	@echo "Individual service targets:"
-	@echo "  build-ae    - Build analysis engine only"
-	@echo "  build-dp    - Build data persistence only"
-	@echo "  start-ae    - Start analysis engine only"
-	@echo "  start-dp    - Start data persistence only"
-
-# Build targets
-build: build-ae build-dp
-
-build-ae:
+build:
 	@echo "Building Analysis Engine..."
-	@GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) go build -o analysis-engine analysis-engine.go
+	@CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o $(BINARY_NAME) main.go
 	@echo "✓ Analysis Engine built successfully"
 
-build-dp:
-	@echo "Building Data Persistence Service..."
-	@GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) go build -o data-persistence data-persistence.go
-	@echo "✓ Data Persistence Service built successfully"
-
-# Installation targets
 install: build
-	@echo "Installing Container Security Analysis Services..."
-	@sudo ./install.sh install
-
-install-ae: build-ae
 	@echo "Installing Analysis Engine..."
-	@sudo ./install.sh install-ae
-
-install-dp: build-dp
-	@echo "Installing Data Persistence Service..."
-	@sudo ./install.sh install-dp
+	@sudo ./install.sh
+	@echo "✓ Installation completed successfully"
 
 uninstall:
-	@echo "Uninstalling Container Security Analysis Services..."
-	@sudo ./install.sh uninstall
+	@echo "Uninstalling Analysis Engine..."
+	@sudo systemctl stop $(SERVICE_NAME) || true
+	@sudo systemctl disable $(SERVICE_NAME) || true
+	@sudo rm -f $(SYSTEMD_DIR)/$(SERVICE_NAME).service
+	@sudo rm -rf $(INSTALL_DIR)
+	@sudo rm -rf $(CONFIG_DIR)
+	@sudo systemctl daemon-reload
+	@echo "✓ Uninstallation completed"
 
-# Service management
 start:
-	@echo "Starting analysis services..."
-	@sudo systemctl start $(ANALYSIS_ENGINE_SERVICE)
-	@sudo systemctl start $(DATA_PERSISTENCE_SERVICE)
+	@echo "Starting Analysis Engine..."
+	@sudo systemctl start $(SERVICE_NAME)
 	@make status
 
-start-ae:
-	@echo "Starting Analysis Engine..."
-	@sudo systemctl start $(ANALYSIS_ENGINE_SERVICE)
-	@sudo systemctl status $(ANALYSIS_ENGINE_SERVICE) --no-pager -l
-
-start-dp:
-	@echo "Starting Data Persistence Service..."
-	@sudo systemctl start $(DATA_PERSISTENCE_SERVICE)
-	@sudo systemctl status $(DATA_PERSISTENCE_SERVICE) --no-pager -l
-
 stop:
-	@echo "Stopping analysis services..."
-	@sudo systemctl stop $(DATA_PERSISTENCE_SERVICE)
-	@sudo systemctl stop $(ANALYSIS_ENGINE_SERVICE)
-
-stop-ae:
-	@sudo systemctl stop $(ANALYSIS_ENGINE_SERVICE)
-
-stop-dp:
-	@sudo systemctl stop $(DATA_PERSISTENCE_SERVICE)
-
-restart: stop start
-
-restart-ae:
-	@sudo systemctl restart $(ANALYSIS_ENGINE_SERVICE)
-	@sudo systemctl status $(ANALYSIS_ENGINE_SERVICE) --no-pager -l
-
-restart-dp:
-	@sudo systemctl restart $(DATA_PERSISTENCE_SERVICE)
-	@sudo systemctl status $(DATA_PERSISTENCE_SERVICE) --no-pager -l
+	@echo "Stopping Analysis Engine..."
+	@sudo systemctl stop $(SERVICE_NAME)
 
 status:
 	@echo "=== Analysis Engine Status ==="
-	@sudo systemctl status $(ANALYSIS_ENGINE_SERVICE) --no-pager -l
-	@echo ""
-	@echo "=== Data Persistence Status ==="
-	@sudo systemctl status $(DATA_PERSISTENCE_SERVICE) --no-pager -l
+	@sudo systemctl status $(SERVICE_NAME) --no-pager || true
 
 logs:
-	@echo "Analysis services logs (press Ctrl+C to exit):"
-	@sudo journalctl -u $(ANALYSIS_ENGINE_SERVICE) -u $(DATA_PERSISTENCE_SERVICE) -f
+	@echo "=== Analysis Engine Logs ==="
+	@sudo journalctl -u $(SERVICE_NAME) --no-pager -n 50
 
-logs-ae:
-	@echo "Analysis Engine logs (press Ctrl+C to exit):"
-	@sudo journalctl -u $(ANALYSIS_ENGINE_SERVICE) -f
+logs-follow:
+	@sudo journalctl -u $(SERVICE_NAME) -f
 
-logs-dp:
-	@echo "Data Persistence logs (press Ctrl+C to exit):"
-	@sudo journalctl -u $(DATA_PERSISTENCE_SERVICE) -f
-
-logs-recent:
-	@echo "Recent analysis services logs:"
-	@sudo journalctl -u $(ANALYSIS_ENGINE_SERVICE) -u $(DATA_PERSISTENCE_SERVICE) --since "1 hour ago" --no-pager
-
-# Testing
 test:
-	@echo "Testing Analysis Services installation..."
-	@echo "1. Checking if services are installed..."
-	@if [ -f "$(SYSTEMD_DIR)/$(ANALYSIS_ENGINE_SERVICE).service" ]; then \
-		echo "✓ Analysis Engine service file exists"; \
+	@echo "Testing Analysis Engine installation..."
+	@echo "1. Checking if service is installed..."
+	@if [ -f $(SYSTEMD_DIR)/$(SERVICE_NAME).service ]; then \
+		echo "✓ Service file exists"; \
 	else \
-		echo "✗ Analysis Engine service file not found"; \
-		exit 1; \
+		echo "✗ Service file missing"; \
 	fi
-	@if [ -f "$(SYSTEMD_DIR)/$(DATA_PERSISTENCE_SERVICE).service" ]; then \
-		echo "✓ Data Persistence service file exists"; \
+	@echo "2. Checking if binary is installed..."
+	@if [ -f $(INSTALL_DIR)/$(BINARY_NAME) ]; then \
+		echo "✓ Binary exists"; \
 	else \
-		echo "✗ Data Persistence service file not found"; \
-		exit 1; \
+		echo "✗ Binary missing"; \
 	fi
-	@echo "2. Checking if binaries are installed..."
-	@if [ -f "$(INSTALL_DIR_AE)/analysis-engine" ]; then \
-		echo "✓ Analysis Engine binary exists"; \
+	@echo "3. Checking configuration..."
+	@if [ -f $(CONFIG_DIR)/config.json ]; then \
+		echo "✓ Config exists"; \
 	else \
-		echo "✗ Analysis Engine binary not found"; \
-		exit 1; \
-	fi
-	@if [ -f "$(INSTALL_DIR_DP)/data-persistence" ]; then \
-		echo "✓ Data Persistence binary exists"; \
-	else \
-		echo "✗ Data Persistence binary not found"; \
-		exit 1; \
-	fi
-	@echo "3. Checking configuration files..."
-	@if [ -f "$(CONFIG_DIR_AE)/config.json" ]; then \
-		echo "✓ Analysis Engine config exists"; \
-	else \
-		echo "✗ Analysis Engine config not found"; \
-		exit 1; \
-	fi
-	@if [ -f "$(CONFIG_DIR_DP)/config.json" ]; then \
-		echo "✓ Data Persistence config exists"; \
-	else \
-		echo "✗ Data Persistence config not found"; \
-		exit 1; \
+		echo "✗ Config missing"; \
 	fi
 	@echo "4. Checking service status..."
-	@sudo systemctl is-enabled $(ANALYSIS_ENGINE_SERVICE) >/dev/null && echo "✓ Analysis Engine is enabled" || echo "✗ Analysis Engine is not enabled"
-	@sudo systemctl is-active $(ANALYSIS_ENGINE_SERVICE) >/dev/null && echo "✓ Analysis Engine is running" || echo "! Analysis Engine is not running"
-	@sudo systemctl is-enabled $(DATA_PERSISTENCE_SERVICE) >/dev/null && echo "✓ Data Persistence is enabled" || echo "✗ Data Persistence is not enabled"
-	@sudo systemctl is-active $(DATA_PERSISTENCE_SERVICE) >/dev/null && echo "✓ Data Persistence is running" || echo "! Data Persistence is not running"
+	@if sudo systemctl is-enabled $(SERVICE_NAME) >/dev/null 2>&1; then \
+		echo "✓ Service is enabled"; \
+	else \
+		echo "! Service is not enabled"; \
+	fi
+	@if sudo systemctl is-active $(SERVICE_NAME) >/dev/null 2>&1; then \
+		echo "✓ Service is running"; \
+	else \
+		echo "! Service is not running"; \
+	fi
 	@echo "5. Checking dependencies..."
-	@sudo systemctl is-active rabbitmq-server >/dev/null && echo "✓ RabbitMQ is running" || echo "! RabbitMQ is not running"
-	@sudo systemctl is-active postgresql >/dev/null && echo "✓ PostgreSQL is running" || echo "! PostgreSQL is not running"
-	@echo ""
-	@echo "Test completed!"
+	@if sudo systemctl is-active rabbitmq-server >/dev/null 2>&1; then \
+		echo "✓ RabbitMQ is running"; \
+	else \
+		echo "✗ RabbitMQ is not running"; \
+	fi
+	@if sudo systemctl is-active postgresql >/dev/null 2>&1; then \
+		echo "✓ PostgreSQL is running"; \
+	else \
+		echo "✗ PostgreSQL is not running"; \
+	fi
 
-# Development targets
-dev-build: build
-
-dev-test:
-	@echo "Running development tests..."
-	@go fmt ./...
-	@go vet ./...
-	@echo "✓ Code formatting and linting passed"
-
-# Clean targets
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -f analysis-engine data-persistence
-	@echo "Clean completed!"
-
-# Service management shortcuts
-enable:
-	@sudo systemctl enable $(ANALYSIS_ENGINE_SERVICE)
-	@sudo systemctl enable $(DATA_PERSISTENCE_SERVICE)
-	@echo "Services enabled"
-
-disable:
-	@sudo systemctl disable $(ANALYSIS_ENGINE_SERVICE)
-	@sudo systemctl disable $(DATA_PERSISTENCE_SERVICE)
-	@echo "Services disabled"
-
-reload:
-	@sudo systemctl daemon-reload
-	@echo "Systemd configuration reloaded" 
+	@rm -f $(BINARY_NAME)
+	@echo "✓ Cleaned" 
