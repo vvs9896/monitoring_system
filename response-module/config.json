@@ -1,0 +1,26 @@
+{
+  "rabbitmq": {
+    "host": "localhost",
+    "port": 5672,
+    "username": "admin",
+    "password": "admin",
+    "queue": "response_queue",
+    "exchange": "response_exchange"
+  },
+  "email": {
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "username": "your-email@gmail.com",
+    "password": "your-app-password",
+    "admin_email": "abc123456@gmail.com",
+    "from_email": "your-email@gmail.com",
+    "from_name": "Container Security Monitor"
+  },
+  "docker": {
+    "socket_path": "/var/run/docker.sock"
+  },
+  "processing": {
+    "retry_attempts": 3,
+    "retry_delay_seconds": 2
+  }
+} 

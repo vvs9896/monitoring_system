@@ -1,0 +1,39 @@
+[Unit]
+Description=Container Security Response Module
+Documentation=https://github.com/your-org/monitoring-system
+After=network.target rabbitmq-server.service analysis-engine.service
+Wants=rabbitmq-server.service analysis-engine.service
+
+[Service]
+Type=simple
+User=response-module
+Group=response-module
+ExecStart=/opt/response-module/response-module /etc/response-module/config.json
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/response-module
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+TasksMax=256
+LimitNOFILE=65536
+
+# Environment
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=multi-user.target 

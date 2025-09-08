@@ -29,6 +29,14 @@ type Config struct {
 		Queue    string `json:"queue"`
 		Exchange string `json:"exchange"`
 	} `json:"rabbitmq"`
+	ResponseRabbitMQ struct {
+		Host     string `json:"host"`
+		Port     int    `json:"port"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Queue    string `json:"queue"`
+		Exchange string `json:"exchange"`
+	} `json:"response_rabbitmq"`
 	Database struct {
 		Host         string `json:"host"`
 		Port         int    `json:"port"`
@@ -56,6 +64,8 @@ type AnalysisEngine struct {
 	db                 *sql.DB
 	rabbitConn         *amqp091.Connection
 	rabbitCh           *amqp091.Channel
+	responseConn       *amqp091.Connection
+	responseCh         *amqp091.Channel
 	signatureAnalyzer  *signature.Analyzer
 	behavioralAnalyzer behavioral.Analyzer
 	eventBatch         []EnrichedEvent
@@ -198,6 +208,76 @@ func (ae *AnalysisEngine) connectRabbitMQ() error {
 		}
 
 		log.Printf("Connected to RabbitMQ at %s:%d", ae.config.RabbitMQ.Host, ae.config.RabbitMQ.Port)
+		return nil
+	}
+}
+
+func (ae *AnalysisEngine) connectResponseRabbitMQ() error {
+	connStr := fmt.Sprintf("amqp://%s:%s@%s:%d/",
+		ae.config.ResponseRabbitMQ.Username,
+		ae.config.ResponseRabbitMQ.Password,
+		ae.config.ResponseRabbitMQ.Host,
+		ae.config.ResponseRabbitMQ.Port)
+
+	for {
+		conn, err := amqp091.Dial(connStr)
+		if err != nil {
+			log.Printf("Failed to connect to Response RabbitMQ: %v, retrying in 5 seconds...", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		ch, err := conn.Channel()
+		if err != nil {
+			conn.Close()
+			log.Printf("Failed to create response channel: %v, retrying in 5 seconds...", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		ae.responseConn = conn
+		ae.responseCh = ch
+
+		// Объявляем exchange и очередь для response module
+		err = ch.ExchangeDeclare(
+			ae.config.ResponseRabbitMQ.Exchange,
+			"direct", true, false, false, false, nil,
+		)
+		if err != nil {
+			ch.Close()
+			conn.Close()
+			log.Printf("Failed to declare response exchange: %v, retrying in 5 seconds...", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		_, err = ch.QueueDeclare(
+			ae.config.ResponseRabbitMQ.Queue,
+			true, false, false, false, nil,
+		)
+		if err != nil {
+			ch.Close()
+			conn.Close()
+			log.Printf("Failed to declare response queue: %v, retrying in 5 seconds...", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		err = ch.QueueBind(
+			ae.config.ResponseRabbitMQ.Queue,
+			"response_key",
+			ae.config.ResponseRabbitMQ.Exchange,
+			false, nil,
+		)
+		if err != nil {
+			ch.Close()
+			conn.Close()
+			log.Printf("Failed to bind response queue: %v, retrying in 5 seconds...", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		log.Printf("Connected to Response RabbitMQ at %s:%d", ae.config.ResponseRabbitMQ.Host, ae.config.ResponseRabbitMQ.Port)
 		return nil
 	}
 }
@@ -400,6 +480,36 @@ func (ae *AnalysisEngine) insertBatch(events []EnrichedEvent) error {
 	return tx.Commit()
 }
 
+func (ae *AnalysisEngine) sendToResponseModule(event EnrichedEvent) error {
+	// Отправляем только события с критичностью CRITICAL или MEDIUM
+	if event.Severity != "CRITICAL" && event.Severity != "MEDIUM" {
+		return nil
+	}
+
+	eventJSON, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event: %w", err)
+	}
+
+	err = ae.responseCh.Publish(
+		ae.config.ResponseRabbitMQ.Exchange,
+		"response_key",
+		false, // mandatory
+		false, // immediate
+		amqp091.Publishing{
+			ContentType:  "application/json",
+			DeliveryMode: amqp091.Persistent,
+			Body:         eventJSON,
+		})
+
+	if err != nil {
+		return fmt.Errorf("failed to publish to response module: %w", err)
+	}
+
+	log.Printf("Event sent to response module: Severity=%s, Container=%s", event.Severity, event.ContainerID)
+	return nil
+}
+
 func (ae *AnalysisEngine) processEvents() {
 	defer ae.wg.Done()
 
@@ -456,6 +566,11 @@ func (ae *AnalysisEngine) processEvents() {
 				continue
 			}
 
+			// Отправляем в response module (если критично или средне)
+			if err := ae.sendToResponseModule(enrichedEvent); err != nil {
+				log.Printf("Failed to send event to response module: %v", err)
+			}
+
 			// Добавляем в батч
 			ae.addToBatch(enrichedEvent)
 
@@ -489,6 +604,11 @@ func (ae *AnalysisEngine) Start() error {
 		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
 	}
 
+	// Подключение к Response RabbitMQ
+	if err := ae.connectResponseRabbitMQ(); err != nil {
+		return fmt.Errorf("failed to connect to Response RabbitMQ: %w", err)
+	}
+
 	// Настройка обработчиков сигналов
 	ae.setupSignalHandlers()
 
@@ -508,6 +628,12 @@ func (ae *AnalysisEngine) Start() error {
 	ae.wg.Wait()
 
 	// Закрытие соединений
+	if ae.responseCh != nil {
+		ae.responseCh.Close()
+	}
+	if ae.responseConn != nil {
+		ae.responseConn.Close()
+	}
 	if ae.rabbitCh != nil {
 		ae.rabbitCh.Close()
 	}

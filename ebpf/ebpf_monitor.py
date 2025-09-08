@@ -170,7 +170,7 @@ class EBPFMonitor:
             if target.endswith("/release_agent") or target.endswith("/notify_on_release"):
                 write_buf = event.buf[:event.len].decode("ascii", errors='ignore')
                 message = f"[CVE-2022-0492] writing to {target}\n[data]\n{write_buf}"
-                self.log_event_message(proc, message, "CRITICAL")
+                self.log_event_message(proc, message)
                 
         except Exception as e:
             logger.error(f"Error in write event handler: {e}")
@@ -190,12 +190,12 @@ class EBPFMonitor:
             
             if source == "cgroup" and "rdma" in data_str:
                 message = f"[CVE-2022-0492] mounting {source} to {target} [options/data]: {data_str}"
-                self.log_event_message(proc, message, "CRITICAL")
+                self.log_event_message(proc, message)
             else:
                 if not data_str:
                     data_str = "none"
                 message = f"[MOUNT] mounting {source} to {target} [options/data]: {data_str}"
-                self.log_event_message(proc, message, "INFO")
+                self.log_event_message(proc, message)
                 
         except Exception as e:
             logger.error(f"Error in mount event handler: {e}")
@@ -215,7 +215,7 @@ class EBPFMonitor:
 
             if (flags & CLONE_NEWUSER) and (flags & CLONE_NEWCGROUP):
                 message = f"[CVE-2022-0492] unshare ({flags}) with user and cgroup namespace from container"
-                self.log_event_message(proc, message, "CRITICAL")
+                self.log_event_message(proc, message)
                 
         except Exception as e:
             logger.error(f"Error in unshare event handler: {e}")
@@ -230,7 +230,7 @@ class EBPFMonitor:
 
             if sock_name.endswith("/docker.sock") and proc.in_container():
                 message = f"[DOCKER-SOCK] connecting to {sock_name}"
-                self.log_event_message(proc, message, "MEDIUM")
+                self.log_event_message(proc, message)
                 
         except Exception as e:
             logger.error(f"Error in connect unix event handler: {e}")
@@ -246,7 +246,7 @@ class EBPFMonitor:
 
             message = f"[GDB-ATTACH] ptrace attach to pid: {target_pid} ( {target_exe} )"
             self.ptraced_pids[target_pid] = target_exe
-            self.log_event_message(proc, message, "CRITICAL")
+            self.log_event_message(proc, message)
             
         except Exception as e:
             logger.error(f"Error in ptrace event handler: {e}")
@@ -270,7 +270,7 @@ class EBPFMonitor:
             
             pwrite_buf = bytes(event.buf)[:event.len].hex()
             message = f"[GDB-ATTACH] pwrite to {target} [ {pwrite_buf} ]"
-            self.log_event_message(proc, message, "CRITICAL")
+            self.log_event_message(proc, message)
             
         except Exception as e:
             logger.error(f"Error in pwrite event handler: {e}")
@@ -286,7 +286,7 @@ class EBPFMonitor:
             
             pathname = event.pathname.decode("ascii")
             message = f"[LOAD-MODULE] loading {pathname} module from container"
-            self.log_event_message(proc, message, "CRITICAL")
+            self.log_event_message(proc, message)
             
         except Exception as e:
             logger.error(f"Error in finit module handler: {e}")
@@ -302,7 +302,7 @@ class EBPFMonitor:
 
             if stat.S_ISBLK(mode) and proc.from_container():
                 message = f"[MKNOD] creating block device {pathname} from container"
-                self.log_event_message(proc, message, "CRITICAL")
+                self.log_event_message(proc, message)
                 
         except Exception as e:
             logger.error(f"Error in mknod event handler: {e}")
@@ -318,7 +318,7 @@ class EBPFMonitor:
             if target.endswith("/core_pattern") or target.endswith("/uevent_helper"):
                 write_buf = bytes(event.buf)[:event.len].decode("ascii", errors='ignore')
                 message = f"[PROC-SYS-WRITE] writing to {target}\n[data]\n{write_buf}"
-                self.log_event_message(proc, message, "CRITICAL")
+                self.log_event_message(proc, message)
                 
         except Exception as e:
             logger.error(f"Error in proc sys write event handler: {e}")
@@ -337,15 +337,15 @@ class EBPFMonitor:
                 if '/containers/create' in write_buf:
                     if '"Privileged":true' in write_buf:
                         message = f"[DOCKER-SOCK] creating privileged container from container\n[data]\n{write_buf}"
-                        self.log_event_message(proc, message, "CRITICAL")
+                        self.log_event_message(proc, message)
                     elif '"Binds":[' in write_buf:
                         message = f"[DOCKER-SOCK] creating container with \"binds\" from container\n[data]\n{write_buf}"
-                        self.log_event_message(proc, message, "CRITICAL")
+                        self.log_event_message(proc, message)
                         
         except Exception as e:
             logger.error(f"Error in docker write event handler: {e}")
     
-    def log_event_message(self, proc, message, severity="INFO"):
+    def log_event_message(self, proc, message):
         """Логирование события с отправкой в RabbitMQ и journald"""
         try:
             # Форматированное сообщение для вывода
@@ -354,13 +354,8 @@ class EBPFMonitor:
                 proc.ppid, proc.parent_comm, proc.comm, message
             )
             
-            # Логирование в journald с соответствующим уровнем
-            if severity == "CRITICAL":
-                logger.critical(formatted_message)
-            elif severity == "MEDIUM":
-                logger.warning(formatted_message)
-            else:
-                logger.info(formatted_message)
+            # Логирование в journald как информационное сообщение
+            logger.info(formatted_message)
             
             # Отправка в RabbitMQ используя существующую функцию из util.py
             print_event_message(proc, message)

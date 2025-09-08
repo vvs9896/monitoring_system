@@ -7,6 +7,14 @@
     "queue": "events_queue",
     "exchange": "events_exchange"
   },
+  "response_rabbitmq": {
+    "host": "localhost",
+    "port": 5672,
+    "username": "admin",
+    "password": "admin",
+    "queue": "response_queue",
+    "exchange": "response_exchange"
+  },
   "database": {
     "host": "localhost",
     "port": 5432,
