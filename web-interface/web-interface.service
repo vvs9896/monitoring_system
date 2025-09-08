@@ -1,0 +1,41 @@
+[Unit]
+Description=Container Security Monitoring Web Interface
+Documentation=https://github.com/your-org/monitoring-system
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=web-interface
+Group=web-interface
+WorkingDirectory=/opt/web-interface
+ExecStart=/opt/web-interface/web-interface -addr :8080 -db-host localhost -db-port 5432 -db-user postgres -db-pass postgres -db-name monitoring
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/web-interface
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=25%
+TasksMax=128
+LimitNOFILE=32768
+
+# Environment
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="GIN_MODE=release"
+
+[Install]
+WantedBy=multi-user.target 

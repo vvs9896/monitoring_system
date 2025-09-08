@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Container Security Monitoring System</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-shield-alt"></i>
+                <h2>Security Monitor</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="active">
+                    <a href="#dashboard" data-page="dashboard">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#events" data-page="events">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Events</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#containers" data-page="containers">
+                        <i class="fab fa-docker"></i>
+                        <span>Containers</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#mitre" data-page="mitre">
+                        <i class="fas fa-bug"></i>
+                        <span>MITRE ATT&CK</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#services" data-page="services">
+                        <i class="fas fa-cogs"></i>
+                        <span>Services</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#system" data-page="system">
+                        <i class="fas fa-server"></i>
+                        <span>System Status</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <h1 id="page-title">Dashboard</h1>
+                </div>
+                <div class="header-right">
+                    <div class="connection-status">
+                        <i class="fas fa-circle" id="connection-indicator"></i>
+                        <span id="connection-text">Connecting...</span>
+                    </div>
+                    <div class="time-filter">
+                        <select id="time-range">
+                            <option value="1">Last 1 hour</option>
+                            <option value="6">Last 6 hours</option>
+                            <option value="24" selected>Last 24 hours</option>
+                            <option value="168">Last 7 days</option>
+                        </select>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card critical">
+                        <div class="stat-icon">
+                            <i class="fas fa-exclamation-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="critical-count">0</h3>
+                            <p>Critical Events</p>
+                        </div>
+                    </div>
+                    <div class="stat-card medium">
+                        <div class="stat-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="medium-count">0</h3>
+                            <p>Medium Events</p>
+                        </div>
+                    </div>
+                    <div class="stat-card info">
+                        <div class="stat-icon">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="info-count">0</h3>
+                            <p>Info Events</p>
+                        </div>
+                    </div>
+                    <div class="stat-card containers">
+                        <div class="stat-icon">
+                            <i class="fab fa-docker"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="container-count">0</h3>
+                            <p>Active Containers</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="charts-row">
+                    <div class="chart-container">
+                        <h3>Events Timeline</h3>
+                        <canvas id="timelineChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Severity Distribution</h3>
+                        <canvas id="severityChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent Events -->
+                <div class="recent-events">
+                    <div class="section-header">
+                        <h3>Recent Events</h3>
+                        <div class="event-controls">
+                            <button class="btn btn-sm" id="auto-refresh-btn">
+                                <i class="fas fa-sync-alt"></i>
+                                Auto Refresh: ON
+                            </button>
+                        </div>
+                    </div>
+                    <div class="events-list" id="recent-events-list">
+                        <!-- Events will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Events Page -->
+            <div id="events-page" class="page">
+                <div class="page-header">
+                    <div class="filters">
+                        <select id="severity-filter">
+                            <option value="">All Severities</option>
+                            <option value="CRITICAL">Critical</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="INFO">Info</option>
+                        </select>
+                        <input type="datetime-local" id="date-from" placeholder="From">
+                        <input type="datetime-local" id="date-to" placeholder="To">
+                        <button class="btn" id="apply-filters">Apply Filters</button>
+                    </div>
+                </div>
+                <div class="events-table-container">
+                    <table class="events-table" id="events-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Severity</th>
+                                <th>Type</th>
+                                <th>Container</th>
+                                <th>Command</th>
+                                <th>Threat Score</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events-table-body">
+                            <!-- Events will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Containers Page -->
+            <div id="containers-page" class="page">
+                <div class="containers-grid" id="containers-grid">
+                    <!-- Containers will be populated here -->
+                </div>
+            </div>
+
+            <!-- MITRE ATT&CK Page -->
+            <div id="mitre-page" class="page">
+                <div class="mitre-grid" id="mitre-grid">
+                    <!-- MITRE techniques will be populated here -->
+                </div>
+            </div>
+
+            <!-- Services Page -->
+            <div id="services-page" class="page">
+                <div class="services-grid" id="services-grid">
+                    <!-- Service links will be populated here -->
+                </div>
+            </div>
+
+            <!-- System Status Page -->
+            <div id="system-page" class="page">
+                <div class="system-status" id="system-status">
+                    <!-- System status will be populated here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Event Details Modal -->
+    <div class="modal" id="event-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Event Details</h3>
+                <span class="close" id="modal-close">&times;</span>
+            </div>
+            <div class="modal-body" id="event-details">
+                <!-- Event details will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html> 
