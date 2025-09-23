@@ -1,21 +1,48 @@
 import os
 import pika
+import logging
 
-connection = pika.BlockingConnection(
-    pika.ConnectionParameters(host='localhost', credentials=pika.PlainCredentials('admin', 'admin'))
-)
-channel = connection.channel()
+# Глобальные переменные для подключения
+connection = None
+channel = None
 
-# Объявляем exchange
-channel.exchange_declare(exchange='events_exchange', exchange_type='direct', durable=True)
+def init_rabbitmq():
+    """Инициализация подключения к RabbitMQ"""
+    global connection, channel
+    
+    try:
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host='localhost', credentials=pika.PlainCredentials('admin', 'admin'))
+        )
+        channel = connection.channel()
 
-# Объявляем очередь и привязываем к exchange
-channel.queue_declare(queue='events_queue', durable=True)
-channel.queue_bind(
-    exchange='events_exchange',
-    queue='events_queue',
-    routing_key='event_key'
-)
+        # Объявляем exchange
+        channel.exchange_declare(exchange='events_exchange', exchange_type='direct', durable=True)
+
+        # Объявляем очередь и привязываем к exchange
+        channel.queue_declare(queue='events_queue', durable=True)
+        channel.queue_bind(
+            exchange='events_exchange',
+            queue='events_queue',
+            routing_key='event_key'
+        )
+        return True
+    except Exception as e:
+        logging.error(f"Failed to connect to RabbitMQ: {e}")
+        connection = None
+        channel = None
+        return False
+
+def ensure_connection():
+    """Проверяет и восстанавливает соединение при необходимости"""
+    global connection, channel
+    
+    if connection is None or connection.is_closed or channel is None or channel.is_closed:
+        return init_rabbitmq()
+    return True
+
+# Инициализация при загрузке модуля
+init_rabbitmq()
 
 def get_ppid(pid):
     try:
@@ -53,20 +80,42 @@ def get_pid_realpath(pid):
 #     (proc.container_id, proc.pid, proc.parent_container_id, proc.ppid, proc.parent_comm, proc.comm, message))
 
 def print_event_message(proc, message):
+    global channel
+    
     # Форматы сообщения
     formatted_message = "%-12s %-7d %-14s %-7d %-40s  ->  %-16s %s" % (
         proc.container_id, proc.pid, proc.parent_container_id, proc.ppid, proc.parent_comm, proc.comm, message)
 
-    # Отправка в RabbitMQ
-    channel.basic_publish(
-        exchange='events_exchange',
-        routing_key='event_key',
-        body=formatted_message.encode('utf-8'),
-        properties=pika.BasicProperties(
-            delivery_mode = 2  # Персистентное сообщение
+    # Проверяем соединение и переподключаемся при необходимости
+    if not ensure_connection():
+        logging.error("Failed to ensure RabbitMQ connection")
+        print(formatted_message)  # Выводим локально если RabbitMQ недоступен
+        return
+
+    try:
+        # Отправка в RabbitMQ
+        channel.basic_publish(
+            exchange='events_exchange',
+            routing_key='event_key',
+            body=formatted_message.encode('utf-8'),
+            properties=pika.BasicProperties(
+                delivery_mode = 2  # Персистентное сообщение
+            )
         )
-    )
-    print(f"Message sent to RabbitMQ: {formatted_message}")
+        print(formatted_message)
+    except Exception as e:
+        logging.error(f"Failed to send message to RabbitMQ: {e}")
+        # Сбрасываем соединение для переподключения в следующий раз
+        try:
+            if channel:
+                channel.close()
+            if connection:
+                connection.close()
+        except:
+            pass
+        globals()['connection'] = None
+        globals()['channel'] = None
+        print(formatted_message)  # Выводим локально при ошибке
 
 class Process:
     def __init__(self, event):

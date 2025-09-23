@@ -1,0 +1,35 @@
+[Unit]
+Description=Container Security Analysis Engine
+Documentation=https://github.com/your-org/monitoring-system
+After=network.target rabbitmq-server.service postgresql.service ebpf-monitor.service
+Wants=rabbitmq-server.service postgresql.service
+Requires=network.target
+
+[Service]
+Type=simple
+User=analysis
+Group=analysis
+WorkingDirectory=/opt/analysis-engine
+ExecStart=/opt/analysis-engine/analysis-engine /etc/analysis-engine/config.json
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=analysis-engine
+
+# Ограничения ресурсов
+MemoryMax=1G
+CPUQuota=200%
+
+# Безопасность
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+ReadWritePaths=/var/log/analysis-engine
+
+# Переменные окружения
+Environment=GOMAXPROCS=2
+
+[Install]
+WantedBy=multi-user.target 
