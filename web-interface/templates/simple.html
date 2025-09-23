@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Chart Test</title>
+</head>
+<body>
+    <h1>Simple Chart Test</h1>
+    
+    <div style="width: 400px; height: 200px;">
+        <canvas id="myChart"></canvas>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script>
+        console.log('Script starting...');
+        console.log('Chart available:', typeof Chart);
+        
+        const canvas = document.getElementById('myChart');
+        console.log('Canvas:', canvas);
+        
+        if (canvas && typeof Chart !== 'undefined') {
+            const ctx = canvas.getContext('2d');
+            console.log('Context:', ctx);
+            
+            const chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['A', 'B', 'C'],
+                    datasets: [{
+                        data: [1, 2, 3],
+                        backgroundColor: ['red', 'green', 'blue']
+                    }]
+                }
+            });
+            
+            console.log('Chart created:', chart);
+        } else {
+            console.error('Canvas or Chart not available');
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chart.js Test</title>
+</head>
+<body>
+    <h1>Chart.js Test Page</h1>
+    
+    <div style="width: 400px; height: 300px; border: 1px solid red;">
+        <canvas id="testChart"></canvas>
+    </div>
+    
+    <div id="log"></div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <script>
+        const log = document.getElementById('log');
+        
+        function addLog(message) {
+            log.innerHTML += '<p>' + message + '</p>';
+            console.log(message);
+        }
+        
+        addLog('Page loaded');
+        
+        if (typeof Chart === 'undefined') {
+            addLog('ERROR: Chart.js not loaded');
+        } else {
+            addLog('Chart.js loaded, version: ' + Chart.version);
+            
+            const ctx = document.getElementById('testChart');
+            if (!ctx) {
+                addLog('ERROR: Canvas not found');
+            } else {
+                addLog('Canvas found');
+                
+                try {
+                    const chart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Red', 'Blue', 'Yellow'],
+                            datasets: [{
+                                label: 'Test Dataset',
+                                data: [12, 19, 3],
+                                backgroundColor: ['red', 'blue', 'yellow']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                    addLog('Chart created successfully');
+                } catch (error) {
+                    addLog('ERROR creating chart: ' + error.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html> 

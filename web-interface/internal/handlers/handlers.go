@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
+	"log"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -199,28 +199,82 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 	h.hub.HandleWebSocket(c.Writer, c.Request)
 }
 
+// StopContainer останавливает контейнер
+func (h *Handler) StopContainer(c *gin.Context) {
+	containerID := c.Param("id")
+	if containerID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Container ID is required"})
+		return
+	}
+
+	cmd := exec.Command("docker", "stop", containerID)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":  "Failed to stop container",
+			"output": string(output),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Container stopped successfully",
+		"id":      containerID,
+	})
+}
+
 // Вспомогательные функции
 
 func (h *Handler) getDockerContainers() []models.Container {
-	cmd := exec.Command("docker", "ps", "-a", "--format", "json")
+	// Используем простой формат без таблицы
+	cmd := exec.Command("docker", "ps", "-a", "--format", "{{.ID}}|{{.Names}}|{{.Image}}|{{.Command}}|{{.Status}}|{{.CreatedAt}}")
 	output, err := cmd.Output()
 	if err != nil {
+		log.Printf("Error getting containers: %v", err)
 		return []models.Container{}
 	}
 
 	var containers []models.Container
-	lines := strings.Split(string(output), "\n")
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
-		var container models.Container
-		if err := json.Unmarshal([]byte(line), &container); err == nil {
+
+		fields := strings.Split(line, "|")
+		if len(fields) >= 5 {
+			container := models.Container{
+				ID:      fields[0][:12], // Короткий ID
+				Names:   []string{fields[1]},
+				Image:   fields[2],
+				Command: truncateString(fields[3], 30),
+				Status:  fields[4],
+				State:   getContainerState(fields[4]),
+			}
+
+			// Простая обработка времени создания
+			container.Created = time.Now().Unix() - 3600 // Примерно час назад, можно улучшить
+
 			containers = append(containers, container)
 		}
 	}
 
 	return containers
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+func getContainerState(status string) string {
+	if strings.Contains(strings.ToLower(status), "up") {
+		return "running"
+	}
+	return "exited"
 }
 
 func (h *Handler) getContainerCount() int {

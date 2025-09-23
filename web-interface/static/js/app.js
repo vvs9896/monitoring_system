@@ -7,16 +7,32 @@ let currentPage = 'dashboard';
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing app...');
+    
+    // Check if Chart.js is available
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not available!');
+        // Try to load alternative CDN
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js';
+        script.onload = function() {
+            console.log('Chart.js loaded from fallback CDN');
+            initializeApp();
+        };
+        document.head.appendChild(script);
+        return;
+    }
+    
     initializeApp();
-    setupWebSocket();
-    setupEventListeners();
-    loadDashboardData();
 });
 
 // Initialize application
 function initializeApp() {
     console.log('Container Security Monitoring System initialized');
     updateConnectionStatus('connecting');
+    setupWebSocket();
+    setupEventListeners();
+    loadDashboardData();
 }
 
 // Setup WebSocket connection
@@ -49,6 +65,64 @@ function setupWebSocket() {
     };
 }
 
+// Update all panels across all pages
+async function updateAllPanels() {
+    try {
+        console.log('Updating all panels...');
+        
+        // Update dashboard data
+        const [statsResponse, eventsResponse, containersResponse, systemResponse] = await Promise.all([
+            fetch('/api/stats'),
+            fetch('/api/events?limit=20'),
+            fetch('/api/containers'),
+            fetch('/api/system')
+        ]);
+        
+        const stats = await statsResponse.json();
+        const events = await eventsResponse.json();
+        const containers = await containersResponse.json();
+        const systemStatus = await systemResponse.json();
+        
+        // Update dashboard
+        updateStatsCards(stats);
+        updateSeverityChart(stats);
+        updateContainerCount(containers ? containers.length : 0);
+        
+        // Update events list on dashboard
+        if (currentPage === 'dashboard') {
+            updateRecentEvents(events);
+        }
+        
+        // Update events page
+        if (currentPage === 'events') {
+            displayEventsTable(events);
+        }
+        
+        // Update containers page
+        if (currentPage === 'containers') {
+            displayContainers(containers);
+        }
+        
+        // Update system page
+        if (currentPage === 'system') {
+            displaySystemStatus(systemStatus);
+        }
+        
+        // Visual indicator
+        const indicator = document.getElementById('connection-indicator');
+        if (indicator) {
+            indicator.style.color = '#4caf50';
+            setTimeout(() => {
+                indicator.style.color = '';
+            }, 300);
+        }
+        
+        console.log('All panels updated');
+    } catch (error) {
+        console.error('Error updating panels:', error);
+    }
+}
+
 // Handle WebSocket messages
 function handleWebSocketMessage(message) {
     switch(message.type) {
@@ -57,6 +131,7 @@ function handleWebSocketMessage(message) {
             break;
         case 'stats_update':
             updateStatsCards(message.data);
+            updateSeverityChart(message.data);
             break;
         case 'system_status':
             updateSystemStatus(message.data);
@@ -66,19 +141,42 @@ function handleWebSocketMessage(message) {
     }
 }
 
+// Update severity chart with new data
+function updateSeverityChart(stats) {
+    if (severityChart && stats) {
+        const total = (stats.critical || 0) + (stats.medium || 0) + (stats.info || 0);
+        if (total > 0) {
+            severityChart.data.datasets[0].data = [stats.critical || 0, stats.medium || 0, stats.info || 0];
+        } else {
+            severityChart.data.datasets[0].data = [1, 1, 1];
+        }
+        severityChart.update('none');
+    }
+}
+
 // Handle new event
 function handleNewEvent(event) {
+    console.log('New event received:', event);
+    
+    // Count event for timeline
+    countEventForTimeline(event);
+    
+    // Update UI immediately
     if (currentPage === 'dashboard') {
         addEventToRecentList(event);
-        updateCharts();
     }
     
-    // Update stats
-    updateStatsFromAPI();
+    // Trigger full UI update
+    updateAllPanels();
 }
 
 // Setup event listeners
 function setupEventListeners() {
+    // Sidebar toggle
+    document.getElementById('sidebar-toggle').addEventListener('click', function() {
+        toggleSidebar();
+    });
+    
     // Navigation
     document.querySelectorAll('[data-page]').forEach(link => {
         link.addEventListener('click', function(e) {
@@ -148,7 +246,9 @@ function switchPage(page) {
     
     currentPage = page;
     
-    // Load page data
+    // Load page data immediately
+    updateAllPanels();
+    
     switch(page) {
         case 'dashboard':
             loadDashboardData();
@@ -177,15 +277,24 @@ async function loadDashboardData() {
         const response = await fetch('/api/dashboard');
         const data = await response.json();
         
+        console.log('Dashboard data loaded:', data);
+        
         updateStatsCards(data.stats);
         updateRecentEvents(data.recent_events);
         updateContainerCount(data.container_count);
         
-        // Initialize charts
-        if (!timelineChart) {
-            initializeCharts();
-        }
-        updateChartsData(data.time_series, data.stats);
+        // Initialize charts after a small delay to ensure DOM is ready
+        setTimeout(() => {
+            console.log('Attempting to initialize charts...');
+            if (!timelineChart || !severityChart) {
+                initializeCharts();
+            }
+            if (timelineChart && severityChart) {
+                updateChartsData(data.time_series, data.stats);
+            } else {
+                console.error('Charts not initialized properly');
+            }
+        }, 500); // Увеличиваю задержку
         
     } catch (error) {
         console.error('Error loading dashboard data:', error);
@@ -339,39 +448,60 @@ function closeModal() {
 
 // Initialize charts
 function initializeCharts() {
+    console.log('=== INITIALIZING CHARTS ===');
+    console.log('Chart object available:', typeof Chart !== 'undefined');
+    console.log('Chart version:', typeof Chart !== 'undefined' ? Chart.version : 'N/A');
+    
     // Timeline Chart
-    const timelineCtx = document.getElementById('timelineChart').getContext('2d');
+    const timelineCanvas = document.getElementById('timelineChart');
+    console.log('Timeline canvas found:', !!timelineCanvas);
+    if (!timelineCanvas) {
+        console.error('Timeline chart canvas not found');
+        return;
+    }
+    
+    const timelineCtx = timelineCanvas.getContext('2d');
+    console.log('Timeline context:', !!timelineCtx);
     timelineChart = new Chart(timelineCtx, {
         type: 'line',
         data: {
-            labels: [],
+            labels: ['Now'],
             datasets: [
                 {
                     label: 'Critical',
-                    data: [],
+                    data: [0],
                     borderColor: '#f44336',
                     backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                    tension: 0.4
+                    tension: 0.4,
+                    fill: true
                 },
                 {
                     label: 'Medium',
-                    data: [],
+                    data: [0],
                     borderColor: '#ff9800',
                     backgroundColor: 'rgba(255, 152, 0, 0.1)',
-                    tension: 0.4
+                    tension: 0.4,
+                    fill: true
                 },
                 {
                     label: 'Info',
-                    data: [],
+                    data: [0],
                     borderColor: '#9e9e9e',
                     backgroundColor: 'rgba(158, 158, 158, 0.1)',
-                    tension: 0.4
+                    tension: 0.4,
+                    fill: true
                 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
             scales: {
                 y: {
                     beginAtZero: true
@@ -380,42 +510,163 @@ function initializeCharts() {
         }
     });
     
+    console.log('Timeline chart created:', !!timelineChart);
+    
     // Severity Chart
-    const severityCtx = document.getElementById('severityChart').getContext('2d');
+    const severityCanvas = document.getElementById('severityChart');
+    console.log('Severity canvas found:', !!severityCanvas);
+    if (!severityCanvas) {
+        console.error('Severity chart canvas not found');
+        return;
+    }
+    
+    const severityCtx = severityCanvas.getContext('2d');
+    console.log('Severity context:', !!severityCtx);
     severityChart = new Chart(severityCtx, {
         type: 'doughnut',
         data: {
             labels: ['Critical', 'Medium', 'Info'],
             datasets: [{
-                data: [0, 0, 0],
-                backgroundColor: ['#f44336', '#ff9800', '#9e9e9e']
+                data: [1, 1, 1], // Начальные данные для отображения
+                backgroundColor: ['#f44336', '#ff9800', '#9e9e9e'],
+                borderWidth: 2,
+                borderColor: '#fff'
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom'
+                }
+            }
         }
     });
+    
+    console.log('Charts initialized successfully');
+    
+    // Force initial render
+    if (timelineChart) timelineChart.update();
+    if (severityChart) severityChart.update();
 }
+
+// Global variables for real-time data
+let timelineData = {
+    labels: [],
+    critical: [],
+    medium: [],
+    info: []
+};
+
+// Event counters for current second
+let currentSecondEvents = {
+    critical: 0,
+    medium: 0,
+    info: 0,
+    lastSecond: Math.floor(Date.now() / 1000)
+};
 
 // Update charts data
 function updateChartsData(timeSeries, stats) {
-    if (timelineChart && timeSeries) {
-        const labels = timeSeries.map(item => new Date(item.timestamp).toLocaleTimeString());
-        const critical = timeSeries.map(item => item.critical);
-        const medium = timeSeries.map(item => item.medium);
-        const info = timeSeries.map(item => item.info);
-        
-        timelineChart.data.labels = labels;
-        timelineChart.data.datasets[0].data = critical;
-        timelineChart.data.datasets[1].data = medium;
-        timelineChart.data.datasets[2].data = info;
-        timelineChart.update();
+    console.log('Updating charts data:', { timeSeries, stats });
+    
+    // Update severity chart
+    if (severityChart && stats) {
+        const total = (stats.critical || 0) + (stats.medium || 0) + (stats.info || 0);
+        if (total > 0) {
+            severityChart.data.datasets[0].data = [stats.critical || 0, stats.medium || 0, stats.info || 0];
+        } else {
+            severityChart.data.datasets[0].data = [1, 1, 1];
+        }
+        severityChart.update();
     }
     
-    if (severityChart && stats) {
-        severityChart.data.datasets[0].data = [stats.critical, stats.medium, stats.info];
-        severityChart.update();
+    // Initialize timeline with empty data (will be populated in real-time)
+    if (timelineChart) {
+        // Initialize with 60 empty data points for the last minute
+        const now = new Date();
+        timelineData.labels = [];
+        timelineData.critical = [];
+        timelineData.medium = [];
+        timelineData.info = [];
+        
+        for (let i = 59; i >= 0; i--) {
+            const time = new Date(now.getTime() - i * 1000);
+            timelineData.labels.push(time.toLocaleTimeString());
+            timelineData.critical.push(0);
+            timelineData.medium.push(0);
+            timelineData.info.push(0);
+        }
+        
+        timelineChart.data.labels = timelineData.labels;
+        timelineChart.data.datasets[0].data = timelineData.critical;
+        timelineChart.data.datasets[1].data = timelineData.medium;
+        timelineChart.data.datasets[2].data = timelineData.info;
+        timelineChart.update();
+    }
+}
+
+// Add new data point to timeline (called every second)
+function addTimelineDataPoint() {
+    if (!timelineChart) return;
+    
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString();
+    
+    // Add current second's event counts
+    timelineData.labels.push(timeLabel);
+    timelineData.critical.push(currentSecondEvents.critical);
+    timelineData.medium.push(currentSecondEvents.medium);
+    timelineData.info.push(currentSecondEvents.info);
+    
+    // Keep only last 60 seconds (1 minute)
+    const maxPoints = 60;
+    if (timelineData.labels.length > maxPoints) {
+        timelineData.labels.shift();
+        timelineData.critical.shift();
+        timelineData.medium.shift();
+        timelineData.info.shift();
+    }
+    
+    // Update chart
+    timelineChart.data.labels = timelineData.labels;
+    timelineChart.data.datasets[0].data = timelineData.critical;
+    timelineChart.data.datasets[1].data = timelineData.medium;
+    timelineChart.data.datasets[2].data = timelineData.info;
+    timelineChart.update('none');
+    
+    // Reset counters for next second
+    currentSecondEvents.critical = 0;
+    currentSecondEvents.medium = 0;
+    currentSecondEvents.info = 0;
+    currentSecondEvents.lastSecond = Math.floor(Date.now() / 1000);
+}
+
+// Count new event for timeline
+function countEventForTimeline(event) {
+    const currentSecond = Math.floor(Date.now() / 1000);
+    
+    // If we're in a new second, reset counters
+    if (currentSecond !== currentSecondEvents.lastSecond) {
+        currentSecondEvents.critical = 0;
+        currentSecondEvents.medium = 0;
+        currentSecondEvents.info = 0;
+        currentSecondEvents.lastSecond = currentSecond;
+    }
+    
+    // Count the event
+    switch(event.severity) {
+        case 'CRITICAL':
+            currentSecondEvents.critical++;
+            break;
+        case 'MEDIUM':
+            currentSecondEvents.medium++;
+            break;
+        case 'INFO':
+            currentSecondEvents.info++;
+            break;
     }
 }
 
@@ -521,21 +772,54 @@ function displayContainers(containers) {
         const name = container.Names && container.Names.length > 0 ? 
             container.Names[0].replace('/', '') : container.Id.substring(0, 12);
         
+        const isRunning = container.State.toLowerCase() === 'running';
+        
         card.innerHTML = `
             <div class="container-header">
                 <div class="container-name">${name}</div>
                 <div class="container-status ${container.State.toLowerCase()}">${container.State}</div>
             </div>
             <div class="container-info">
+                <p><strong>ID:</strong> ${container.Id}</p>
                 <p><strong>Image:</strong> ${container.Image}</p>
                 <p><strong>Command:</strong> ${container.Command}</p>
                 <p><strong>Status:</strong> ${container.Status}</p>
                 <p><strong>Created:</strong> ${new Date(container.Created * 1000).toLocaleString()}</p>
             </div>
+            <div class="container-actions">
+                <button class="btn btn-danger" onclick="stopContainer('${container.Id}')" ${!isRunning ? 'disabled' : ''}>
+                    <i class="fas fa-stop"></i> Stop Container
+                </button>
+            </div>
         `;
         
         grid.appendChild(card);
     });
+}
+
+// Stop container
+async function stopContainer(containerId) {
+    if (!confirm('Are you sure you want to stop this container?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/containers/${containerId}/stop`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Container stopped successfully');
+            loadContainersPage(); // Refresh the container list
+        } else {
+            alert('Failed to stop container: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error stopping container:', error);
+        alert('Error stopping container');
+    }
 }
 
 // Load MITRE page
@@ -651,10 +935,60 @@ function displaySystemStatus(status) {
     });
 }
 
-// Auto refresh functionality
-setInterval(() => {
-    if (autoRefresh && currentPage === 'dashboard') {
-        updateStatsFromAPI();
-        updateCharts();
+// Toggle sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    const toggleIcon = document.querySelector('#sidebar-toggle i');
+    
+    sidebar.classList.toggle('collapsed');
+    mainContent.classList.toggle('sidebar-collapsed');
+    
+    if (sidebar.classList.contains('collapsed')) {
+        toggleIcon.className = 'fas fa-chevron-right';
+    } else {
+        toggleIcon.className = 'fas fa-chevron-left';
     }
-}, 30000); // Refresh every 30 seconds 
+}
+
+// Timeline updates every second (add new data point)
+setInterval(() => {
+    if (autoRefresh) {
+        addTimelineDataPoint();
+    }
+}, 1000); // Every second
+
+// Full UI updates every 5 seconds
+setInterval(async () => {
+    if (autoRefresh) {
+        updateAllPanels();
+    }
+}, 5000); // Every 5 seconds
+
+// Monitor for new events more frequently
+setInterval(async () => {
+    if (autoRefresh) {
+        try {
+            const response = await fetch('/api/events?limit=1');
+            const events = await response.json();
+            
+            if (events && events.length > 0) {
+                const latestEvent = events[0];
+                const eventTime = new Date(latestEvent.time).getTime();
+                const now = Date.now();
+                
+                // If event is less than 2 seconds old, it's new
+                if (now - eventTime < 2000) {
+                    console.log('Detected new event:', latestEvent);
+                    countEventForTimeline(latestEvent);
+                    
+                    if (currentPage === 'dashboard') {
+                        addEventToRecentList(latestEvent);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error checking for new events:', error);
+        }
+    }
+}, 1000); // Every second 

@@ -53,12 +53,25 @@ func main() {
 		})
 	})
 
+	r.GET("/test", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "test.html", gin.H{
+			"title": "Chart.js Test",
+		})
+	})
+
+	r.GET("/simple", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "simple.html", gin.H{
+			"title": "Simple Chart Test",
+		})
+	})
+
 	// API routes
 	api := r.Group("/api")
 	{
 		api.GET("/dashboard", handler.GetDashboard)
 		api.GET("/events", handler.GetEvents)
 		api.GET("/containers", handler.GetContainers)
+		api.POST("/containers/:id/stop", handler.StopContainer)
 		api.GET("/stats", handler.GetStats)
 		api.GET("/timeseries", handler.GetTimeSeries)
 		api.GET("/mitre", handler.GetMITREAttacks)

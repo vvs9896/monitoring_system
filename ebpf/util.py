@@ -9,6 +9,7 @@ channel = None
 def init_rabbitmq():
     """Инициализация подключения к RabbitMQ"""
     global connection, channel
+    
     try:
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(host='localhost', credentials=pika.PlainCredentials('admin', 'admin'))

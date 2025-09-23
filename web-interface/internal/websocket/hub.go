@@ -35,12 +35,23 @@ type Client struct {
 
 // NewHub создает новый WebSocket hub
 func NewHub() *Hub {
-	return &Hub{
+	hub := &Hub{
 		clients:    make(map[*Client]bool),
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 	}
+
+	// Start periodic stats broadcaster
+	go hub.startPeriodicUpdates()
+
+	return hub
+}
+
+// Start periodic updates
+func (h *Hub) startPeriodicUpdates() {
+	// This will be called from the handler with actual data
+	// Just a placeholder for now
 }
 
 // Run запускает hub
