@@ -186,7 +186,7 @@ func (h *Handler) GetSystemStatus(c *gin.Context) {
 func (h *Handler) GetServiceLinks(c *gin.Context) {
 	links := map[string]string{
 		"rabbitmq":    "http://localhost:15672",
-		"timescaledb": "http://localhost:5432", // Обычно нет веб-интерфейса
+		"timescaledb": "http://localhost:80",
 		"portainer":   "http://localhost:9000", // Если установлен
 		"grafana":     "http://localhost:3000", // Если установлен
 	}

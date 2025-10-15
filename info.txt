@@ -37,6 +37,11 @@ timescale http://ftp.ru.debian.org/debian/pool/main/t/timescaledb/postgresql-17-
 rabbitmq http://ftp.ru.debian.org/debian/pool/main/r/rabbitmq-server/rabbitmq-server_4.0.5-10_all.deb
 
 
+pgadmin
+docker pull dpage/pgadmin4
+docker run -p 80:80 -e 'PGADMIN_DEFAULT_EMAIL=user@domain.com' -e 'PGADMIN_DEFAULT_PASSWORD=SuperSecret' -d dpage/pgadmin4 
+
+
 tests:
 (1) CAP_SYS_PTRACE
     sudo docker run -it --cap-add CAP_SYS_PTRACE --pid=host --security-opt=apparmor:unconfined ubuntu:latest
